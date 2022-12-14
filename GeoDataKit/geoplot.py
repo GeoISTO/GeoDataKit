@@ -28,7 +28,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def rose_diagram(data, direction_label= None, category_label= None):
+def rose_diagram(data, 
+                 direction_label= None, category_label= None,
+                 degrees= True,
+                 bin_width= 10
+    ):
     """
     Generates a RoseDiagram to show direction data
 
@@ -53,6 +57,12 @@ def rose_diagram(data, direction_label= None, category_label= None):
         Label of the column containing a classification of the entries in the
         dataset. Not used if the data is passed as an array-like structure. 
         The default is None.
+    degrees: bool, optional
+        tells whether the data is in degrees or in radian.
+        Default is True, meaning it is in degrees.
+    bin_width: float, optional
+        The width of the histogram bars in degrees if degrees is True,
+        in radian otherwise. Default is 10.
 
     Returns
     -------
@@ -60,11 +70,16 @@ def rose_diagram(data, direction_label= None, category_label= None):
 
     """
     
-    figure_object = RoseDiagram(data)
+    rose = RoseDiagram(data, 
+                       direction_label= direction_label,
+                       category_label= category_label,
+                       degrees= degrees,
+                       bin_width = bin_width
+                       )
     
-    figure_object.show()
+    rose.show()
     
-    return figure_object
+    return rose
 
 class RoseDiagram:
     """RoseDiagram: a polar histogram to analyse directional data
@@ -179,6 +194,8 @@ class RoseDiagram:
     def show(self):
         """
         Plots the Rose diagram.
+        
+        TODO: make the options accessible
 
         Returns
         -------
