@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""geoplot module: provides tools for ploting specialised geoscience diagrams
+"""geoplot module from the GeoDataKit: tools for ploting geoscience diagrams
 
 This module mainly relies on advanced ploting libraries, which are called
 in specific ways to produce scientific visualisation tailored to geoscience
@@ -34,7 +34,7 @@ def rose_diagram(data, direction_label= None, category_label= None):
 
     Parameters
     ----------
-    data : DataFrame or array-like data
+    data : :class:`pandas.DataFrame` or array-like data
         the dataset containing the direction data. Either passed as a DataFrame
         or as an array-like structure. If an array-like structure is used, then
         it must be passed as a single column array containing only the 
@@ -81,7 +81,7 @@ class RoseDiagram:
         
     Attributes
     -----------
-    data: DataFrame
+    data: :class:`pandas.DataFrame`
         A Pandas DataFrame containing the direction dataset and categories
         if necessary.
     fig: Figure
@@ -205,13 +205,14 @@ class RoseDiagram:
             sns_ax = sns.histplot(self.data, x= self.direction_label_rad, hue= self.category_label,
                  binwidth= self.bin_width_rad, binrange= [-self.bin_width_rad/2.0,2*np.pi],
                  stat= "count", # count, percent, frequency, proportion, density
-                 hue_order = ["Rand", "Fam1","Fam2"],
+                 #hue_order = ["Rand", "Fam1","Fam2"],
                  multiple="layer", # {“layer” or "stack", the others produce strange results “dodge”, “fill”}
                  element= "bars", # {“bars”,  the others produce strange results  “step”, “poly”}
                  edgecolor="k", linewidth=0.75, zorder= 10,
                  palette= "bright", # deep, colorblind, bright, muted, dark, pastel
                  ax= self.ax, legend= True )
-            sns.move_legend(sns_ax, "upper left", bbox_to_anchor = (1.1, 1))
+            if self.category_label is not None:
+                sns.move_legend(sns_ax, "upper left", bbox_to_anchor = (1.1, 1))
         
         r_ticks = self.ax.get_yticks()
         self.ax.set_rgrids( r_ticks, angle=0)
