@@ -15,5 +15,12 @@ setup(name='GeoDataKit',
                       'pandas>=1.3',
                       'numpy>=1.20',
                       'matplotlib>=3.5',
-                      ]
+                      ],
+      classifiers=[
+          "Development Status :: 2 - Pre-Alpha",
+          "Intended Audience :: Science/Research",
+          "Natural Language :: English",
+          "Programming Language :: Python :: 3",
+          "Topic :: Scientific/Engineering :: Visualization"
+          ]
       )
