@@ -1,0 +1,19 @@
+# -*- coding: utf-8 -*-
+from setuptools import setup, find_packages
+ 
+setup(name='GeoDataKit',
+      version='0.0',
+      url='https://github.com/GeoISTO/GeoDataKit',
+      license='MIT',
+      author='Gautier Laurent',
+      author_email='gautier.laurent@univ-orleans.fr',
+      description='Analyses and graphs for geoscience',
+      packages=find_packages(exclude=['tests']),
+      long_description=open('README.md').read(),
+      zip_safe=False,
+      setup_requires=['seaborn>=0.11',
+                      'pandas>=1.3',
+                      'numpy>=1.20',
+                      'matplotlib>=3.5',
+                      ]
+      )
