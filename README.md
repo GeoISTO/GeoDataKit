@@ -8,6 +8,17 @@ NB: this is really preliminary developments
 pip install -i https://test.pypi.org/simple/ GeoDataKit
 ```
 
-### Demo
+## Demo
 See in the notebook directory.
+
+## Dev
+Building distribution:
+```
+python setup.py sdist bdist_wheel
+```
+
+Pushing to PYPI:
+```
+twine upload -r pypitest --verbose -p ######## dist/*
+```
 
