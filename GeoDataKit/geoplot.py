@@ -33,7 +33,7 @@ import seaborn as sns
 
 def rose_diagram(data, **kargs):
     """
-    Generates a RoseDiagram to show direction data
+    Generates a RoseDiagram to show direction data.
 
     Parameters
     ----------
