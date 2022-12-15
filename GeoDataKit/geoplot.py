@@ -51,6 +51,25 @@ def rose_diagram(data, **kargs):
     **kargs: dict()
         keyword arguments passed to the `RoseDiagram` methods. Refer to the 
         documentation of this class to see the full list of arguments.
+        
+        
+    Keyword arguments
+    ---------------
+    direction_label : str, optional
+        Label of the column containing the direction data. Must be given if the
+        dataset is passed as a DataFrame. The default is None.
+    category_label : str, optional
+        Label of the column containing a classification of the entries in the
+        dataset. The default is None.
+    degrees: bool, optional
+        tells whether the data is in degrees or in radian.
+        Default is True, meaning it is in degrees.
+    bin_width: float, optional
+        The width of the histogram bars in degrees if degrees is True,
+        in radian otherwise. Default is 10.
+    verbose: bool, optional
+        Specify the behaviour of the class, whether it should
+        output information or not. The default is False.
 
     Returns
     -------
@@ -197,7 +216,50 @@ class RoseDiagram:
         """
         Plots the Rose diagram.
         
-        TODO: make the options accessible
+        Parameters
+        -----------
+        stat_type: str, optional
+            specifies which kind of statistics should be used for the bars:
+                count, percent, frequency, proportion, density.
+                Default is count. The options are copied from seaborn:
+            - `count`: show the number of observations in each bin
+            - `frequency`: show the number of observations divided by the bin width
+            - `probability`: or `proportion`: normalize such that bar heights sum to 1
+            - `percent`: normalize such that bar heights sum to 100
+            - `density`: normalize such that the total area of the histogram equals 1
+        x_axis_label: str, optional
+            specifies the label for the orientation (theta) axis. Default is
+            the name of the column containing the orientation data.
+        y_axis_label: str, optional
+            specifies the label for the statistics (r) axis. Default is
+            the value of stat_type.
+        y_axis_angle: number, optional
+            the location of the y_axis values, as an angle in degree. Default 0
+        category_order: list, optional
+            specifies the ordering of the categories to be plotted. The first 
+            one is on top of the other and so on. Should give a list of 
+            category namesDefault is None, i.e., keeps the default ordering.
+        bin_shape: str, optional
+            specifies the shape of the bins. Default is bars.
+            -`bars`: each bin is an individual bar
+            -`step`: all the bars in each category are gathered in a same shape
+            -`poly`: a polygone is drawn for each category, producing a 
+            smoother shape.
+        category_interaction: str, optional
+            specifies how different category should interact. Default `layer`
+            - `layer`: each category is drawn in a different layer, visible by 
+            transparency below those above.
+            - `stack`: each category is drawn in the continuation of the 
+            previous shape, stacking it in the radial direction.
+            - `proportion`: the drawing will fill all the radial space and
+            the proportion of each category is represented by the relative
+            portion of the shape occupied by the category.
+        edge_color: str, optional
+            a matplolib color or string to specify the color of the edges of 
+            the shapes.
+        edge_width: float, optional
+            the thickness of the shape edges. Use 0. to remove the edges.
+            Default is 0.75
 
         Returns
         -------
@@ -216,6 +278,18 @@ class RoseDiagram:
         self.ax.set_thetagrids(angles=np.concatenate((np.arange(0, 360, 10), np.arange(0, 360, 90))),
                           labels=np.concatenate((np.arange(0, 360, 10), ["N","E","S","W"])))
 
+        # parameters
+        stat_type = get_kargs("stat_type","count",**kargs)
+        bin_shape = get_kargs("bin_shape","bars",**kargs)
+        category_order = get_kargs("category_order",None,**kargs)
+        category_interaction = get_kargs("category_interaction",None,**kargs)
+        category_interaction = "fill" if category_interaction == "proportion" else category_interaction
+        x_axis_label = get_kargs("x_axis_label",self.direction_label, **kargs)
+        y_axis_label = get_kargs("y_axis_label",stat_type, **kargs)
+        y_axis_angle = get_kargs("y_axis_angle",0, **kargs)
+        edge_color = get_kargs("edge_color","k", **kargs)
+        edge_width = get_kargs("edge_width",0.75, **kargs)
+
         if self.data is None:
             if self.verbose: print("Undefined dataset, not drawing.")
         else:
@@ -223,19 +297,20 @@ class RoseDiagram:
             # using seaborn for drawing the polar histogram
             sns_ax = sns.histplot(self.data, x= self.direction_label_rad, hue= self.category_label,
                  binwidth= self.bin_width_rad, binrange= [-self.bin_width_rad/2.0,2*np.pi],
-                 stat= "count", # count, percent, frequency, proportion, density
-                 #hue_order = ["Rand", "Fam1","Fam2"],
-                 multiple="layer", # {“layer” or "stack", the others produce strange results “dodge”, “fill”}
-                 element= "bars", # {“bars”,  the others produce strange results  “step”, “poly”}
-                 edgecolor="k", linewidth=0.75, zorder= 10,
+                 stat= stat_type,
+                 hue_order= category_order,
+                 multiple= category_interaction,
+                 element= bin_shape,
+                 edgecolor= edge_color, linewidth= edge_width, zorder= 10,
                  palette= "bright", # deep, colorblind, bright, muted, dark, pastel
                  ax= self.ax, legend= True )
             if self.category_label is not None:
                 sns.move_legend(sns_ax, "upper left", bbox_to_anchor = (1.1, 1))
         
         r_ticks = self.ax.get_yticks()
-        self.ax.set_rgrids( r_ticks, angle=0)
-        self.ax.set_ylabel("")
+        self.ax.set_rgrids( r_ticks, angle= y_axis_angle)
+        self.ax.set_ylabel(y_axis_label)
+        self.ax.set_xlabel(x_axis_label)
 
         
 
