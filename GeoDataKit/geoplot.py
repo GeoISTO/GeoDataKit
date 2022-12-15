@@ -78,7 +78,7 @@ def rose_diagram(data, **kargs):
     """
     
     rose = RoseDiagram(data, **kargs )
-    rose.show()
+    rose.show(**kargs)
     
     return rose
 
@@ -232,7 +232,11 @@ class RoseDiagram:
             the name of the column containing the orientation data.
         y_axis_label: str, optional
             specifies the label for the statistics (r) axis. Default is
-            the value of stat_type.
+            the text specified by default depending on the choice of stat_type.
+            Use None to remove te label.
+        y_axis_label_padding: int, optional
+            padding to shift the location of the y axis label and avoid 
+            intersection with the orientation labels. Default is 20.
         y_axis_angle: number, optional
             the location of the y_axis values, as an angle in degree. Default 0
         category_order: list, optional
@@ -260,6 +264,18 @@ class RoseDiagram:
         edge_width: float, optional
             the thickness of the shape edges. Use 0. to remove the edges.
             Default is 0.75
+        color_palette: str; optional
+            variations of the color palette to be used for categories. cf.,
+            seaborn documentation:  deep, colorblind, bright, muted, dark,
+            pastel. Default is bright.
+        alpha: float, optional
+            set the level of transparency. Default is 0.75.
+        shrink: float, optional
+            shrinking makes the bars smaller in width which better separates
+            the bars for visualisation purpose. It is given as a factor of 
+            contraction (shrink) between 1 (full width) and 0 (completely 
+            collapsed). It only affects the "bars" layout (i.e., ignored for
+            "step" and "poly". Default is 1. (i.e., no shrink).
 
         Returns
         -------
@@ -282,13 +298,17 @@ class RoseDiagram:
         stat_type = get_kargs("stat_type","count",**kargs)
         bin_shape = get_kargs("bin_shape","bars",**kargs)
         category_order = get_kargs("category_order",None,**kargs)
-        category_interaction = get_kargs("category_interaction",None,**kargs)
+        category_interaction = get_kargs("category_interaction","layer",**kargs)
         category_interaction = "fill" if category_interaction == "proportion" else category_interaction
         x_axis_label = get_kargs("x_axis_label",self.direction_label, **kargs)
-        y_axis_label = get_kargs("y_axis_label",stat_type, **kargs)
+        y_axis_label = get_kargs("y_axis_label","default", **kargs)
+        y_axis_label_padding = get_kargs("y_axis_label_padding",20, **kargs)
         y_axis_angle = get_kargs("y_axis_angle",0, **kargs)
         edge_color = get_kargs("edge_color","k", **kargs)
         edge_width = get_kargs("edge_width",0.75, **kargs)
+        color_palette = get_kargs("color_palette","bright", **kargs)
+        alpha = get_kargs("alpha",0.75, **kargs)
+        shrink = get_kargs("shrink",1.0, **kargs)
 
         if self.data is None:
             if self.verbose: print("Undefined dataset, not drawing.")
@@ -302,15 +322,28 @@ class RoseDiagram:
                  multiple= category_interaction,
                  element= bin_shape,
                  edgecolor= edge_color, linewidth= edge_width, zorder= 10,
-                 palette= "bright", # deep, colorblind, bright, muted, dark, pastel
+                 palette= color_palette,
+                 alpha= alpha,
+                 shrink= shrink,
                  ax= self.ax, legend= True )
             if self.category_label is not None:
                 sns.move_legend(sns_ax, "upper left", bbox_to_anchor = (1.1, 1))
         
         r_ticks = self.ax.get_yticks()
         self.ax.set_rgrids( r_ticks, angle= y_axis_angle)
-        self.ax.set_ylabel(y_axis_label)
+        if y_axis_label != "default":
+            self.ax.set_ylabel(y_axis_label)
+        self.ax.set_ylabel(self.ax.get_ylabel(),labelpad= y_axis_label_padding)
         self.ax.set_xlabel(x_axis_label)
 
-        
+
+# script usage
+if (__name__ == '__main__'):
+    import GeoDataKit.dataset as dataset
+    data = dataset.get_dataset("orientation")
+    rose_diagram(data, category_label="category", bin_width=20,
+                 color_palette= "bright",
+                 category_order= ["Rand","Cat1","Cat2"],
+                 stat_type= "density",
+                 x_axis_label= "Orientation (°)")
 
