@@ -13,6 +13,69 @@ List of datasets:
 
 import pandas as pd
 
+def get_dataset(name:str):
+    """
+    Accessor to the datasets.
+
+    Parameters
+    ----------
+    name : str
+        name of the selected dataset.
+
+    Returns
+    -------
+    A :class:`pd.DataFrame` containing the dataset
+
+    """
+    return dataset[name]
+
+def get_description(name:str):
+    """
+    Access the description of a given dataset.
+
+    Parameters
+    ----------
+    name : str
+        name of the dataset.
+
+    Returns
+    -------
+    A string containing the description of the dataset.
+
+    """
+    return dataset_description[name]
+
+def list_dataset(description:bool = False):
+    """Provides a list of available dataset
+    
+    Parameters
+    ----------
+    description: bool, optional
+        if True, a description of the datasets is also returned
+        
+    Returns
+    ----------
+    A list containing the name of the dataset that can be used as keys 
+    for retrieving it with `get_dataset(name)`.
+    If `description` is True, a `dict()` associating each key with its 
+    description (Datasets with missing description are ignored).
+    """
+    return list(dataset) if description is False else\
+        {key:dataset_description[key] for key in dataset if key in dataset_description}
+
+dataset_description = {
+    "orientation": "A series of orientation values given as azimuth from North. \
+The orientation values are contained in the \"strike_deg\" column. They \
+are given in degrees, clockwise from North, ranging from 0 to 360 °. \
+The values are categorized by the \"category\" column. \
+A total of 300 values are contained in the dataset, grouped in \
+3 categories:\n\
+ - Cat1:  50 values, random around  50 °, ranging [35,65]\n\
+ - Cat2: 150 values, random around 320 °, ranging [290,350]\n\
+ - Rand: 100 values, random ranging [0,360]\n\
+Values are rounded to unit integers."
+    }
+
 dataset = {
     "orientation": pd.DataFrame(
             {"strike_deg":[106, 108, 111,  95,  92, 110, 100,  97, 110, 106, 114,  89,  92,
