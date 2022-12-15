@@ -22,17 +22,16 @@ Helper functions provide direct access to the diagram generation:
     - rose_diagram(): generates a RoseDiagram
 """
 
+from GeoDataKit.utils import get_kargs
+
+import numbers
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def rose_diagram(data, 
-                 direction_label= None, category_label= None,
-                 degrees= True,
-                 bin_width= 10
-    ):
+def rose_diagram(data, **kargs):
     """
     Generates a RoseDiagram to show direction data
 
@@ -49,20 +48,9 @@ def rose_diagram(data,
         column in the DataFrame containing a string or integer corresponding to
         the classification; in this case, category parameter must receive the
         name of the corresponding column.
-    direction_label : str, optional
-        Label of the column containing the direction data. Must be given if the
-        dataset is passed as a DataFrame. Not used if the data is passed as an 
-        array-like structure. The default is None.
-    category_label : str, optional
-        Label of the column containing a classification of the entries in the
-        dataset. Not used if the data is passed as an array-like structure. 
-        The default is None.
-    degrees: bool, optional
-        tells whether the data is in degrees or in radian.
-        Default is True, meaning it is in degrees.
-    bin_width: float, optional
-        The width of the histogram bars in degrees if degrees is True,
-        in radian otherwise. Default is 10.
+    **kargs: dict()
+        keyword arguments passed to the `RoseDiagram` methods. Refer to the 
+        documentation of this class to see the full list of arguments.
 
     Returns
     -------
@@ -70,13 +58,7 @@ def rose_diagram(data,
 
     """
     
-    rose = RoseDiagram(data, 
-                       direction_label= direction_label,
-                       category_label= category_label,
-                       degrees= degrees,
-                       bin_width = bin_width
-                       )
-    
+    rose = RoseDiagram(data, **kargs )
     rose.show()
     
     return rose
@@ -112,11 +94,7 @@ class RoseDiagram:
         Plots the Rose diagram
     """
     
-    def __init__(self, data= None,
-                 direction_label= None,
-                 category_label= None,
-                 degrees= True,
-                 bin_width= 10, verbose= False):
+    def __init__(self, data= None, **kargs ):
         """
         Constructor of a RoseDiagram.
         
@@ -127,6 +105,9 @@ class RoseDiagram:
             Orientation is expected to be expressed in degrees clockwise from
             North direction. The default is None as the data could be set later
             on by calling set_data().
+            
+        Keyword arguments
+        ---------------
         direction_label : str, optional
             Label of the column containing the direction data. Must be given if the
             dataset is passed as a DataFrame. The default is None.
@@ -149,14 +130,17 @@ class RoseDiagram:
 
         """
         
-        self.verbose = verbose
+        self.verbose = get_kargs("verbose", False, **kargs)
         if self.verbose: print("Preparing the data")
         
-        self.bin_width_rad = np.deg2rad(bin_width) if degrees else bin_width
-        self.set_data(data, direction_label, category_label, degrees)
+        degrees= get_kargs("degrees", True, **kargs)
+        bin_width= get_kargs("bin_width", 10, **kargs)
         
-    def set_data(self, data, direction_label, category_label= None,
-                 degrees= True):
+        self.bin_width_rad = np.deg2rad(bin_width) if degrees else bin_width
+        
+        self.set_data(data, **kargs)
+        
+    def set_data(self, data, **kargs ):
         """
         Setter of dataset
         
@@ -167,8 +151,9 @@ class RoseDiagram:
             Orientation is expected to be expressed in degrees clockwise from
             North direction.
         direction_label : str, optional
-            Label of the column containing the direction data. Must be given if the
-            dataset is passed as a DataFrame. The default is None.
+            Label of the column containing the direction data. Must be given if
+            the dataset is passed as a DataFrame. The default is None, if so 
+            the first column with values is used.
         category_label : str, optional
             Label of the column containing a classification of the entries in the
             dataset. The default is None.
@@ -182,16 +167,33 @@ class RoseDiagram:
 
         """
         
+        
+        # processing the data
+        if data is None:
+            if self.verbose and (self.data is not None): print("Resetting the dataset.")
+            self.data = data
+            return
+        assert( isinstance(data, pd.DataFrame)), "data must be a pd.DataFrame. Here data was: "+type(data)
         self.data = data
-        self.direction_label= direction_label
-        self.category_label = category_label
+        
+        # finding the direction label (either given or first value column)
+        self.direction_label= get_kargs("direction_label", None, **kargs)
+        assert(not self.data.empty), "data must contain values, here data.empty is True"
+        number_columns = [col for col in self.data.columns if isinstance(self.data[col].iloc[0], numbers.Number) ]
+        assert(len(number_columns)>0), "data must contain at least one column with numbers, here none was found in data:\n"+str(self.data.head())
+        self.direction_label = number_columns[0]
+        
+        self.category_label = get_kargs("category_label", None, **kargs)
+        degrees= get_kargs("degrees", True, **kargs)
         
         # converting data from degrees to rad
-        self.direction_label_rad = self.direction_label+"_rad" if degrees and (self.direction_label is not None) else self.direction_label
+        self.direction_label_rad = self.direction_label+"_rad" \
+                                    if degrees and (self.direction_label is not None) \
+                                    else self.direction_label
         if degrees and (self.data is not None):
             self.data[self.direction_label_rad] = np.deg2rad(self.data[self.direction_label]) 
         
-    def show(self):
+    def show(self, **kargs):
         """
         Plots the Rose diagram.
         
