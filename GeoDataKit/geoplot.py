@@ -237,6 +237,12 @@ class RoseDiagram:
         y_axis_label_padding: int, optional
             padding to shift the location of the y axis label and avoid 
             intersection with the orientation labels. Default is 20.
+            Only used when y_axis_label_location is left.
+        y_axis_label_location: str, optional
+            sets the location of the y_axis  label.
+            -left: on the left of the diagram
+            -north: along the North axis
+            Default is left
         y_axis_angle: number, optional
             the location of the y_axis values, as an angle in degree. Default 0
         category_order: list, optional
@@ -303,6 +309,7 @@ class RoseDiagram:
         x_axis_label = get_kargs("x_axis_label",self.direction_label, **kargs)
         y_axis_label = get_kargs("y_axis_label","default", **kargs)
         y_axis_label_padding = get_kargs("y_axis_label_padding",20, **kargs)
+        y_axis_label_location = get_kargs("y_axis_label_location","left", **kargs)
         y_axis_angle = get_kargs("y_axis_angle",0, **kargs)
         edge_color = get_kargs("edge_color","k", **kargs)
         edge_width = get_kargs("edge_width",0.75, **kargs)
@@ -334,6 +341,8 @@ class RoseDiagram:
         if y_axis_label != "default":
             self.ax.set_ylabel(y_axis_label)
         self.ax.set_ylabel(self.ax.get_ylabel(),labelpad= y_axis_label_padding)
+        if y_axis_label_location == "north":
+            self.ax.yaxis.set_label_coords(0.5,0.95)    
         self.ax.set_xlabel(x_axis_label)
 
 
@@ -345,5 +354,6 @@ if (__name__ == '__main__'):
                  color_palette= "bright",
                  category_order= ["Rand","Cat1","Cat2"],
                  stat_type= "density",
-                 x_axis_label= "Orientation (°)")
+                 x_axis_label= "Orientation (°)",
+                 y_axis_label_location= "north")
 
