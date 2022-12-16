@@ -197,10 +197,8 @@ class RoseDiagram:
         
         # finding the direction label (either given or first value column)
         self.direction_label= get_kargs("direction_label", None, **kargs)
-        assert(not self.data.empty), "data must contain values, here data.empty is True"
-        number_columns = [col for col in self.data.columns if isinstance(self.data[col].iloc[0], numbers.Number) ]
-        assert(len(number_columns)>0), "data must contain at least one column with numbers, here none was found in data:\n"+str(self.data.head())
-        self.direction_label = number_columns[0]
+        if self.direction_label is None:
+            self.direction_label = self.find_direction_label(self.data)
         
         self.category_label = get_kargs("category_label", None, **kargs)
         degrees= get_kargs("degrees", True, **kargs)
@@ -212,6 +210,59 @@ class RoseDiagram:
         if degrees and (self.data is not None):
             self.data[self.direction_label_rad] = np.deg2rad(self.data[self.direction_label]) 
         
+    def find_direction_label(self,data):
+        assert(not data.empty), "data must contain values, here data.empty is True"
+        number_columns = [col for col in data.columns if isinstance(data[col].iloc[0], numbers.Number) ]
+        assert(len(number_columns)>0), "data must contain at least one column with numbers, here none was found in data:\n"+str(data.head())
+        return number_columns[0]
+        
+    def add_data(self, data, 
+                 direction_label= None, category_label= None, 
+                 category_name= None, 
+                 degrees= True
+                 ):
+        """
+        add a given dataset to the current one
+
+        Parameters
+        ----------
+        data : TYPE
+            DESCRIPTION.
+        direction_label : TYPE, optional
+            DESCRIPTION. The default is None.
+        category_label : TYPE, optional
+            DESCRIPTION. The default is None.
+        category_name : str, optional
+            The default is None.
+        degrees : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # dataset if it is None
+        if self.data is None:
+            self.direction_label= direction_label if direction_label is not None else "strike_deg"
+            columns = []
+            if (category_name is not None) or (category_label is not None):
+                self.category_label= category_label if category_label is not None else "category"
+                category_name = category_name if category_name is not None else "Cat_1"
+                columns += [self.category_label]
+            self.data = pd.DataFrame(columns=columns)
+        elif isinstance(data, pd.DataFrame):
+            direction_label= direction_label if direction_label is not None else self.find_direction_label(data)
+            assert (direction_label in data.columns), "direction_label must be a column header of the dataset, here {} is not in {}.".format(direction_label, data.columns)
+            columns={direction_label:self.direction_label}
+            
+            if (category_name is not None) or (category_label is not None):
+                category_label= category_label if category_label is not None else self.category_label
+                category_name = category_name if category_name is not None else self.guess_category_name()
+                columns[category_label]= self.category_label
+            data.rename(columns=columns)
+            
     def show(self, **kargs):
         """
         Plots the Rose diagram.
