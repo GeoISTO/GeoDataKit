@@ -3,13 +3,19 @@ Python tools for geoscience data analysis and visualisation
 
 NB: this is really preliminary developments
 
+## Demo
+Demonstration Notebooks are available in the [./notebook](./notebook) directory.
+
+Available notebooks:
+1. Rose Diagram demo
+2. Hough Transform demo
+
+
 ## Installation
 ```
 pip install -i https://test.pypi.org/simple/ GeoDataKit
 ```
 
-## Demo
-See in the notebook directory.
 
 ## Dev
 Building distribution:
