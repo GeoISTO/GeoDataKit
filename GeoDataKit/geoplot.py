@@ -197,10 +197,8 @@ class RoseDiagram:
         
         # finding the direction label (either given or first value column)
         self.direction_label= get_kargs("direction_label", None, **kargs)
-        assert(not self.data.empty), "data must contain values, here data.empty is True"
-        number_columns = [col for col in self.data.columns if isinstance(self.data[col].iloc[0], numbers.Number) ]
-        assert(len(number_columns)>0), "data must contain at least one column with numbers, here none was found in data:\n"+str(self.data.head())
-        self.direction_label = number_columns[0]
+        if self.direction_label is None:
+            self.direction_label = self.find_direction_label(self.data)
         
         self.category_label = get_kargs("category_label", None, **kargs)
         degrees= get_kargs("degrees", True, **kargs)
@@ -212,6 +210,59 @@ class RoseDiagram:
         if degrees and (self.data is not None):
             self.data[self.direction_label_rad] = np.deg2rad(self.data[self.direction_label]) 
         
+    def find_direction_label(self,data):
+        assert(not data.empty), "data must contain values, here data.empty is True"
+        number_columns = [col for col in data.columns if isinstance(data[col].iloc[0], numbers.Number) ]
+        assert(len(number_columns)>0), "data must contain at least one column with numbers, here none was found in data:\n"+str(data.head())
+        return number_columns[0]
+        
+    def add_data(self, data, 
+                 direction_label= None, category_label= None, 
+                 category_name= None, 
+                 degrees= True
+                 ):
+        """
+        add a given dataset to the current one
+
+        Parameters
+        ----------
+        data : TYPE
+            DESCRIPTION.
+        direction_label : TYPE, optional
+            DESCRIPTION. The default is None.
+        category_label : TYPE, optional
+            DESCRIPTION. The default is None.
+        category_name : str, optional
+            The default is None.
+        degrees : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # dataset if it is None
+        if self.data is None:
+            self.direction_label= direction_label if direction_label is not None else "strike_deg"
+            columns = []
+            if (category_name is not None) or (category_label is not None):
+                self.category_label= category_label if category_label is not None else "category"
+                category_name = category_name if category_name is not None else "Cat_1"
+                columns += [self.category_label]
+            self.data = pd.DataFrame(columns=columns)
+        elif isinstance(data, pd.DataFrame):
+            direction_label= direction_label if direction_label is not None else self.find_direction_label(data)
+            assert (direction_label in data.columns), "direction_label must be a column header of the dataset, here {} is not in {}.".format(direction_label, data.columns)
+            columns={direction_label:self.direction_label}
+            
+            if (category_name is not None) or (category_label is not None):
+                category_label= category_label if category_label is not None else self.category_label
+                category_name = category_name if category_name is not None else self.guess_category_name()
+                columns[category_label]= self.category_label
+            data.rename(columns=columns)
+            
     def show(self, **kargs):
         """
         Plots the Rose diagram.
@@ -345,6 +396,508 @@ class RoseDiagram:
             self.ax.yaxis.set_label_coords(0.5,0.95)    
         self.ax.set_xlabel(x_axis_label)
 
+
+# ------------------------------
+# Hough
+def get_key_argument(key,default,**kargs):
+    """read a parameter from kargs dict (**kargs) given its key, if not found or kargs is None it returns the default value"""
+    return default if key not in kargs.keys() else kargs[key]
+
+class HoughKernel:
+    def kernel(type="gaussian",**kargs):
+        return kernel_dict[type](**kargs)
+    
+    def gaussian(sigma=1,**kargs):
+        return lambda delta: np.exp(-0.5*(np.abs(delta)**2)/sigma**2)
+    
+    def triangle(sigma=1,trunc=True,**kargs):
+        if trunc:
+            return lambda delta: np.maximum(0,1 - np.abs(delta)/sigma)
+        else:
+            return lambda delta: 1 - np.abs(delta)/sigma
+        
+    def line(width,antialiase=True,**kargs):
+        if antialiase:
+            return lambda delta: np.where(np.abs(delta) < width/2, 1, np.maximum(0, 1 - (np.abs(delta)-width/2)/width*2))
+        else:  
+            return lambda delta: np.where(np.abs(delta) < width/2, 1, 0)
+
+kernel_dict={
+    "gaussian": HoughKernel.gaussian,
+    "triangle": HoughKernel.triangle,
+    "line": HoughKernel.line
+}        
+
+class HoughTransform:
+    """This class describes a Hough Transformation to detect alignements in a point set.
+    It holds a CartesianSpace where the data points are located and a HoughSpace that parameterises lines as a distance and an angle.
+    """
+    
+    def __init__(self,data=None,**kargs):
+        """Creates a new HoughTransform.
+        
+        data (optional [x,y], array of 2D points with x and y coordinates): if given it will help initialise the spaces, else you can give it later with add_data
+        kargs (dict): optional arguments that will be passed along
+        """
+        self.vect = np.empty((0,2))
+        self.distances = np.empty((0,1))
+        self.center= np.array([0,0])
+        self.cartesian = CartesianSpace(data,**kargs)
+        self.hough = HoughSpace(self,**kargs)
+        
+        kargs["update_center"] = kargs["update_center"] if "update_center" in kargs.keys() else True
+        self.add_data(data,**kargs)
+        self.select_data_point(None)
+        
+    def add_data(self,data,update_center=True,**kargs):
+        """adds data points to the Cartesian space
+        data: array of x and y coordinates, [[x0,x1,...],[y0,y1...]]"""
+        self.cartesian.add_data(data,**kargs)
+        
+        if update_center: self.update_center()
+
+    def update_center(self,center=None):
+        """ updates the HoughTransform center, default: uses the data set center if defined, else uses (0,0)"""
+        self.center = center if center is not None \
+                        else self.cartesian.center if self.cartesian.data is not None \
+                        else np.array([0,0])
+        self.update_vect()
+        
+    def update_vect(self):
+        """computes the vectors from the hough center to the data points"""
+        self.vect = self.cartesian.data.T - self.center if self.cartesian.data is not None else np.empty((0,2))
+        self.update_distances()
+            
+    def update_distances(self):
+        """computes the distances from hough center to data points"""
+        self.distances = np.linalg.norm(self.vect,axis=1)
+        self.hough.update_distance_array()
+        
+    def select_data_point(self,index=None):
+        assert index is None or index < self.cartesian.data_length(), "index exceeds data count, {} > {}".format(index, self.cartesian.data_length())
+        self.selected_index = index
+        
+    def line_normal(self,az):
+        """Computes the normal vector to a line
+        az: Azimuth of the line, angle in degrees, 0 means North, i.e., Y direction, increasing clockwise
+        return: np.array([nx,ny]), with n the normal vector to the line
+        if multiple az values are given, the returned form is np.array([[nx0,nx1...,nxn],[ny0,ny1,...nyn])"""
+        az_rad = np.deg2rad(az)
+        nx = -np.cos(az_rad)
+        ny = np.sin(az_rad)
+        return np.array([nx,ny])
+    
+    def line_vectors(self,az):
+        """az: angle from North to the line in degrees (positive to the East)
+        returns [[ux,uy],[vx,vy]] where u is the direction vector of the line and v its normal vector"""
+        #az_rad = np.deg2rad(az)
+        #ux = np.sin(az_rad)
+        #uy = np.cos(az_rad)
+        #return np.array([[ux,uy],[uy,-ux]])
+        nx,ny= self.line_normal(az)
+        return np.array([[-ny,nx],[nx,ny]])
+    
+    def compute_hough_distance(self,point,az):
+        """computes the distances corresponding to a list of data points
+        point ([x,y] or [[x0,y0],[x1,y1]...]): data points
+        az (value or array): azimuth for which the distance must be evaluated
+        returns: [dist], angle being the azimuth of the line and dist its distance to the hough center"""
+        vect = point - self.center
+        normal_vector = self.line_normal(az)
+        return np.dot(vect,normal_vector)
+    
+    def compute_hough_point(self,point,az):
+        """computes the angle and distances corresponding to a list of data points
+        point ([x,y] or [[x0,y0],[x1,y1]...]): data points
+        az (value or array): azimuth for which the distance must be evaluated
+        returns: [x,y], coordinate of the hough point corresponding to the given line"""
+        vect = point - self.center
+        normal_vector = self.line_normal(az)
+        return self.center + normal_vector * np.dot(vect,normal_vector)
+    
+    def hough_point(self,az,dist):
+        normal_vector = self.line_normal(az)
+        return self.center + normal_vector * dist
+        
+class CartesianSpace:
+    """A class for describing a Cartesian space together with helper functions to handle it.
+    Stores the data points."""
+    
+    def __init__(self,data=None,**kargs):
+        """Creates a new CartesianSpace.
+        
+        data (optional [x,y], array of 2D points with x and y coordinates): if given it will help initialise the spaces, else you can give it later with add_data
+        kargs (dict): optional arguments that will be passed along
+        used arguments:
+         - padding_perc (number, default 0.05): percentage of the data width to add to X and Y range to define the data region
+        """
+        self.add_data(data,**kargs)
+        self.update_area(xmin=0,xmax=10,ymin=0,ymax=10,**kargs)
+        
+    def is_empty(self):
+        """tells if the space is empty"""
+        return self.data_length() == 0
+    
+    def data_length(self):
+        return 0 if self.data is None else self.data.shape[-1]
+        
+    def add_data(self,data,update_area=False,**kargs):
+        """adds data to the Cartesian space
+        data ([x,y], array of 2D points with x and y coordinates) 
+        kargs (dict): optional arguments that will be passed along
+        """
+        self.data = data if data is not None else np.empty((2,0))
+        if update_area: self.update_area(**kargs)
+        
+    def update_area(self,**kargs):
+        """Parameters: kargs (dict) may contain
+        - padding_perc (number, default 0.05): percentage of the data width to add to X and Y range to define the data region
+        - xmin (number): minimal value of X for the bounding box
+        - xmax (number): maximal value of X for the bounding box
+        - ymin (number): minimal value of Y for the bounding box
+        - ymax (number): maximal value of Y for the bounding box
+        """
+        self.padding_perc = get_key_argument("padding_perc",0.05,**kargs)
+        self.xmin,self.ymin = (0,0)
+        self.xmax,self.ymax = (10,10)
+        if not self.is_empty():
+            self.xmin,self.ymin = np.min(self.data,axis=1)
+            self.xmax,self.ymax = np.max(self.data,axis=1)
+        self.xmin = get_key_argument("xmin",self.xmin,**kargs)
+        self.xmax = get_key_argument("xmax",self.xmax,**kargs)
+        self.ymin = get_key_argument("ymin",self.ymin,**kargs)
+        self.ymax = get_key_argument("ymax",self.ymax,**kargs)
+        
+        min_point = np.array([self.xmin,self.ymin])
+        max_point = np.array([self.xmax,self.ymax])
+        self.center = np.mean(np.array([[self.xmin,self.xmax],[self.ymin,self.ymax]]),
+                              axis=1
+                             )
+        self.xmin,self.ymin = self.center + (1+self.padding_perc) * (min_point - self.center)
+        self.xmax,self.ymax = self.center + (1+self.padding_perc) * (max_point - self.center)
+        self.x_range = self.xmax - self.xmin
+        self.y_range = self.ymax - self.ymin
+        self.mean_range = np.mean((self.x_range, self.y_range))
+        
+class HoughSpace:
+    """A class for describing a Hough space together with helper functions to handle it."""
+    
+    def __init__(self,hough_transform,**kargs):
+        """creates a HoughSpace associated to a HoughTransform
+        hough_transform (required): a HoughTransform giving context to this Hough Space
+        
+        Angles are in degrees, distances are in the unit of the CartesianSpace associated to the HoughTransform."""
+        self.hough_transform = hough_transform
+        
+        self.init_angle_array(**kargs)
+        self.update_distance_array(**kargs)
+        
+        self.update_hough_lines()
+        
+    def init_angle_array(self,**kargs):
+        """inits the boundaries and array of angles defining the HoughSpace"""
+        self.angle_min = get_key_argument("angle_min",0,**kargs)
+        self.angle_max =  get_key_argument("angle_max",360,**kargs)
+        self.angle_step = get_key_argument("angle_step",3,**kargs)
+        
+        n_angle = int((self.angle_max - self.angle_min)/self.angle_step)
+        self.angle_array = np.linspace(self.angle_min, self.angle_max, n_angle, endpoint=True)
+        
+    def update_distance_array(self,**kargs):
+        """inits the boundaries and array of distance defining the HoughSpace"""
+        padding_perc = get_key_argument("padding_perc",0.05,**kargs)
+        max_dist = max(self.hough_transform.distances) if len(self.hough_transform.distances) > 0 else 10
+        self.distance_min = (1+padding_perc)*get_key_argument("distance_min",-max_dist,**kargs)
+        self.distance_max = (1+padding_perc)*get_key_argument("distance_max",max_dist,**kargs)
+        
+        if "distance_step" in kargs.keys():
+            self.distance_step = kargs["distance_step"]
+            n_distance = int((self.distance_max - self.distance_min)/self.distance_step)
+        else:
+            n_distance = get_key_argument("n_distance",100,**kargs)
+            self.distance_step = (self.distance_max - self.distance_min)/n_distance
+        self.distance_array = np.linspace(self.distance_min, self.distance_max, n_distance, endpoint=True)
+        
+        self.update_hough_lines()
+        self.update_accumulator()
+        
+    def update_hough_lines(self):
+        self.hough_lines_dist = self.hough_transform.compute_hough_distance(self.hough_transform.cartesian.data.T,self.angle_array)
+    
+    def update_accumulator(self, kernel_type="gaussian",sigma=None,antialiase=True,**kargs):
+        self.accumulator_angle, self.accumulator_dist = np.meshgrid(self.angle_array, self.distance_array)
+        self.accumulator = np.zeros_like(self.accumulator_angle)
+        
+        if sigma is None:
+            sigma = self.hough_transform.cartesian.mean_range / 10
+            
+        max = get_key_argument("max",self.distance_max,**kargs)
+        if "max" in kargs.keys(): del kargs["max"]
+        
+        width = get_key_argument("width",self.distance_step,**kargs)
+        if "width" in kargs.keys(): del kargs["width"]
+        
+        kernel = HoughKernel.kernel(type=kernel_type, sigma=sigma, max= max, width= width, antialiase=antialiase, **kargs)
+        for line_dist_i in self.hough_lines_dist:
+            delta = np.abs(self.accumulator_dist - line_dist_i)
+            self.accumulator += kernel(delta)
+    
+    def find_optimum(self):
+        i_max= np.argmax(self.accumulator)
+        n = len(self.angle_array)
+        i_angle,i_dist = (i_max//n,i_max%n)
+        self.optimum_angle = self.accumulator_angle[i_angle,i_dist]
+        self.optimum_dist = self.accumulator_dist[i_angle,i_dist]
+        return (self.optimum_angle,self.optimum_dist)
+    
+class HoughPlot:
+    """Handles the plottign of a Hough Transform"""
+    
+    def __init__(self,hough_transform=None,data=None):
+        assert isinstance(hough_transform,HoughTransform) or hough_transform is None, "hough_transform must be an object HoughTransform, here it is {}".format(type(hough_transform))
+        self.hough_transform = hough_transform if hough_transform is not None else HoughTransform()
+        if data is not None: self.hough_transform.add_data(data)
+        self.fig, self.cartesian_ax, self.hough_ax = 3*[None]
+    
+    def plot(self,show_cartesian=True,show_hough=True,**kargs):
+        if self.fig is None:
+            self.init_figure(**kargs)
+        if show_cartesian: self.plot_cartesian(**kargs)
+        if show_hough: self.plot_hough(**kargs)
+        
+    def init_figure(self,show_cartesian=True,show_hough=True,**kargs):
+        """creates the figure for drawing either the Cartesian or Hough Spaces or both (default)"""
+        if show_cartesian and show_hough:
+            self.fig, [self.cartesian_ax, self.hough_ax] = plt.subplots(ncols=2,nrows=1)
+        elif show_cartesian:
+            self.fig, self.cartesian_ax = plt.subplots(ncols=1,nrows=1)
+            self.hough_ax = None
+        elif show_hough:
+            self.fig, self.hough_ax = plt.subplots(ncols=1,nrows=1)
+            self.cartesian_ax =None
+        fig_size = get_key_argument("fig_size",(16,6),**kargs)
+        self.fig.set_size_inches(fig_size)
+        
+    def plot_cartesian(self, 
+                       show_data= True,
+                       show_selected= False,
+                       show_center= False,
+                       show_hough_center= True,
+                       **kargs):
+        """Plots the Cartesian space with all relevant information."""
+        self.update_cartesian_axis(**kargs)
+        if show_center: self.show_center(**kargs)
+        if show_hough_center: self.add_marked_point(self.hough_transform.center, marked_text='H',**kargs)
+        if show_data: self.plot_data_points(**kargs)
+        if show_selected: self.plot_selected(**kargs)
+            
+    def update_cartesian_axis(self,**kargs):
+        """Changes the axis where drawing is made for Cartesian space
+        - ax (pyplot axis): if a pyplot axis is given, the space will be drawn in it, else default pyplot axis is used
+        - kargs: alternatively an axis can be passed to the kargs and will be used if ax is None
+        """
+        default_ax = self.cartesian_ax if self.cartesian_ax is not None else plt.gca()
+        self.cartesian_ax = get_key_argument("cartesian_ax",default_ax,**kargs)
+        self.update_cartesian_plot_info(**kargs)
+        
+    def update_cartesian_plot_info(self,**kargs):
+        self.cartesian_ax.set_title("Cartesian space")
+        self.cartesian_ax.set_xlabel("X")
+        self.cartesian_ax.set_xlim(self.hough_transform.cartesian.xmin,self.hough_transform.cartesian.xmax)
+        self.cartesian_ax.set_ylabel("Y")
+        self.cartesian_ax.set_ylim(self.hough_transform.cartesian.ymin,self.hough_transform.cartesian.ymax)
+        self.cartesian_ax.set_aspect('equal')
+        
+    def plot_point(self,x,y,**kargs):
+        """Plots points into the Cartesian space."""
+        self.update_cartesian_axis(**kargs)
+        
+        self.cartesian_ax.scatter(x,y,**kargs)
+    
+    def show_center(self,**kargs):
+        center_style = get_key_argument("center_style",'+',**kargs)
+        center_color = get_key_argument("center_color",'gray',**kargs)
+        center_text = get_key_argument("center_text",'O',**kargs)
+        
+        self.ax.scatter(*self.center, marker= center_style, c= center_color)
+        self.ax.annotate(s= center_text, xy= self.center, xytext= self.center)
+    
+    def add_marked_point(self,point,**kargs):
+        marked_style = get_key_argument("marked_style",'+',**kargs)
+        marked_color = get_key_argument("marked_color",'gray',**kargs)
+        marked_size = get_key_argument("marked_size",16,**kargs)
+        marked_text = get_key_argument("marked_text",None,**kargs)
+        marked_shift = get_key_argument("marked_shift",[0.01,0.01],**kargs)
+        min_dimension = min(self.hough_transform.cartesian.x_range,self.hough_transform.cartesian.y_range)
+        marked_shift_vector = min_dimension * np.array(marked_shift)
+        
+        self.cartesian_ax.scatter(*point, marker= marked_style, c= marked_color,s=marked_size)
+        if marked_text is not None:
+            self.cartesian_ax.annotate(text= marked_text, xy= point, xytext= point + marked_shift_vector)
+            
+    def add_segment(self,A,B,**kargs):
+        segment = np.reshape([A,B],(2,2))
+        self.cartesian_ax.plot(segment[:,0],segment[:,1],**kargs)
+        
+    def add_line_az(self,origin,az,**kargs):
+        """Add a line to the graph area by finding its intersections with the borders.
+        Parameters:
+        - origin ([x,y]): a point along the line
+        - az (angle in degree): the angle from North direction to the line, positive towards the Est 
+        """
+        az_rad = np.deg2rad(az)
+        vect = np.array([np.sin(az_rad),np.cos(az_rad)])
+        self.add_line(origin,vect,**kargs)
+        
+    def add_line(self,origin,vect,**kargs):
+        """Add a line to the graph area by finding its intersections with the borders.
+        Parameters:
+        - origin ([x,y]): a point along the line
+        - vect ([ux,uy]): the direction vector of the line
+        """
+        vect = np.array(vect)
+        if vect[0] == 0:
+            kmin = (self.hough_transform.cartesian.ymin - origin[1])/vect[1]
+            kmax = (self.hough_transform.cartesian.ymax - origin[1])/vect[1]
+        elif vect[1] == 0:
+            kmin = (self.hough_transform.cartesian.xmin - origin[0])/vect[0]
+            kmax = (self.hough_transform.cartesian.xmax - origin[0])/vect[0]
+        else:
+            ks = [
+                (self.hough_transform.cartesian.ymin - origin[1])/vect[1],
+                (self.hough_transform.cartesian.ymax - origin[1])/vect[1],
+                (self.hough_transform.cartesian.xmin - origin[0])/vect[0],
+                (self.hough_transform.cartesian.xmax - origin[0])/vect[0]
+            ]
+            kmin,kmax = np.sort(ks)[[1,2]]
+        A = origin + kmin * vect
+        B = origin + kmax * vect
+        self.add_segment(A,B,**kargs)
+        
+    def plot_data_points(self,**kargs):
+        size = get_key_argument("data_size",1,**kargs)
+        color = get_key_argument("data_color","black",**kargs)
+        self.plot_point(*self.hough_transform.cartesian.data,s=size,c=color)
+    
+    def plot_selected(self,index=None,az=None,show_circle=False,show_hough_point=False,show_triangle=False,
+                      show_vector=False,**kargs):
+        """Select a given Cartesian point and highlight it in Cartesian and Hough spaces.
+        
+        index [int, default=None]: the index of the selected point
+        az [value, default=None]: the azimuth of a selected line going through the selected point
+        show_circle [Bool, default=True]: if True shows the Hough Circle in Cartesian space (gathering all the possible poles for lines going through the selected point)
+        show_hough_point [Bool, default=True]: if True shows the Hough pole for the selected point and line
+        show_triangle [Bool, default=True]: if True shows the triangle in Cartesian space joining the selected point, hough pole and hough center
+        show_vector [Bool, default=True]: if True, shows the direction and normal vectors to the selected line"""
+        if index is not None: self.hough_transform.select_data_point(index)
+        selected = self.hough_transform.selected_index
+        if selected is None: return
+        
+        selected_point = self.hough_transform.cartesian.data[:,selected]
+        selected_point_size = get_key_argument("selected_point_size",16,**kargs)
+        selected_point_color = get_key_argument("selected_point_color","red",**kargs)
+        selected_line_size = get_key_argument("selected_line_size",16,**kargs)
+        selected_line_color = get_key_argument("selected_line_color","#69B9FB",**kargs)
+        if self.cartesian_ax is not None:
+            self.add_marked_point(selected_point,
+                                  marked_size=selected_point_size, marked_color=selected_point_color,
+                                  marked_text="P", marked_style= "o",zorder=10)
+            
+            if show_circle:
+                circle_center = 0.5 * (selected_point + self.hough_transform.center)
+                self.add_marked_point(circle_center, marked_color="gray", marked_text=None, marked_style= "+")
+                self.add_segment(selected_point,self.hough_transform.center,linestyle='--',c="gray")
+                circle_radius = np.linalg.norm(circle_center - self.hough_transform.center)
+                circle = plt.Circle(circle_center, circle_radius, fill= False, linestyle='--')
+                self.cartesian_ax.add_patch(circle)
+                
+            if az is not None:
+                dir_vector,normal_vector = self.hough_transform.line_vectors(az)
+                hough_point = self.hough_transform.compute_hough_point(selected_point,az)
+                self.add_line_az(hough_point,az,c=selected_line_color)
+                if show_hough_point:
+                    self.add_marked_point(hough_point, marked_color="gray", marked_text="C", marked_style= "+")
+                if show_triangle:
+                    self.add_segment(self.hough_transform.center,hough_point,c="gray")
+                    self.add_segment(selected_point,hough_point,c="gray")
+                if show_vector:
+                    self.cartesian_ax.annotate("", xytext=hough_point, xy=hough_point + dir_vector,
+                                          arrowprops=dict(arrowstyle="->"))
+                    self.cartesian_ax.annotate("", xytext=hough_point, xy=hough_point + normal_vector,
+                                          arrowprops=dict(arrowstyle="->"))
+                    
+        if self.hough_ax is not None:
+            dist = self.hough_transform.compute_hough_distance(selected_point,az)
+            self.hough_ax.scatter(az,dist,c=selected_line_color,s=selected_line_size,zorder=10,**kargs)
+            
+            angle_array = self.hough_transform.hough.angle_array
+            selected_line_dist = self.hough_transform.hough.hough_lines_dist[index]
+            self.hough_ax.plot(angle_array,selected_line_dist,c=selected_point_color,zorder=5)
+    
+    def plot_hough(self,
+                   show_accumulator= True,
+                   show_lines= False,
+                   **kargs):
+        """Plots the Hough space with all relevant information."""
+        self.update_hough_axis(**kargs)
+        if show_accumulator: self.plot_hough_accumulator(**kargs)
+        if show_lines: self.plot_hough_lines(**kargs)
+        
+    def plot_hough_lines(self,**kargs):
+        angle_array = self.hough_transform.hough.angle_array
+        for dist_array in self.hough_transform.hough.hough_lines_dist:
+            self.hough_ax.plot(angle_array,dist_array)
+            
+    def plot_hough_accumulator(self, show_contour= False, show_optim=True, **kargs):
+        extent = (self.hough_transform.hough.angle_min, self.hough_transform.hough.angle_max,
+                  self.hough_transform.hough.distance_min, self.hough_transform.hough.distance_max)
+        accumulator_mappable = self.hough_ax.imshow(self.hough_transform.hough.accumulator,origin="lower",extent=extent,aspect="auto",zorder=0)
+        self.fig.colorbar(mappable=accumulator_mappable, ax=self.hough_ax)
+        
+        if show_contour:
+            max_count = np.max(self.hough_transform.hough.accumulator)
+            print(max_count)
+            contour_mappable = self.hough_ax.contour(
+                self.hough_transform.hough.accumulator_angle, self.hough_transform.hough.accumulator_dist,
+                self.hough_transform.hough.accumulator, levels= np.arange(1,max_count,dtype=int),zorder=5,
+                linestyles= ["solid"],
+                colors= "darkgrey"
+            )
+            self.hough_ax.clabel(contour_mappable, inline=1, fontsize=10,colors="w",fmt="%d")
+            
+        if show_optim:
+            self.hough_transform.hough.find_optimum()
+            self.plot_manual(self.hough_transform.hough.optimum_angle,self.hough_transform.hough.optimum_dist)
+            
+    def update_hough_axis(self,**kargs):
+        """Changes the axis where drawing is made for Hough space
+        - ax (pyplot axis): if a pyplot axis is given, the space will be drawn in it, else default pyplot axis is used
+        - kargs: alternatively an axis can be passed to the kargs and will be used if ax is None
+        """
+        default_ax = self.hough_ax if self.hough_ax is not None else plt.gca()
+        self.hough_ax = get_key_argument("hough_ax",default_ax,**kargs)
+        self.update_hough_plot_info(**kargs)
+        
+    def update_hough_plot_info(self,**kargs):
+        self.hough_ax.set_title("Hough space")
+        self.hough_ax.set_xlabel("Angle (degree)")
+        self.hough_ax.set_xlim(self.hough_transform.hough.angle_min,self.hough_transform.hough.angle_max)
+        self.hough_ax.set_ylabel("Distance")
+        self.hough_ax.set_ylim(self.hough_transform.hough.distance_min,self.hough_transform.hough.distance_max)
+        self.hough_ax.xaxis.set_ticks_position("both")
+        self.hough_ax.yaxis.set_ticks_position("both")
+        self.hough_ax.xaxis.set_ticks(range(0,365,45))
+        self.hough_ax.xaxis.set_ticks(range(0,365,15),minor=True)
+        self.hough_ax.set_aspect(2/3 / self.hough_ax.get_data_ratio())
+        self.hough_ax.plot([self.hough_transform.hough.angle_min,self.hough_transform.hough.angle_max],[0,0],linewidth=1,linestyle='--',c="gray")
+        
+    def plot_manual(self,az,dist):
+        self.hough_ax.scatter(az,dist, zorder=10, c= "red")
+        
+        hough_point = self.hough_transform.hough_point(az=az,dist=dist)
+        self.add_line_az(hough_point,az)
+
+# ------------------------------
 
 # script usage
 if (__name__ == '__main__'):
