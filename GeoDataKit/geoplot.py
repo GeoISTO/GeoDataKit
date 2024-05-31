@@ -829,6 +829,7 @@ class HoughPlot:
         if self.hough_ax is not None:
             dist = self.hough_transform.compute_hough_distance(selected_point,az)
             self.hough_ax.scatter(az,dist,c=selected_line_color,s=selected_line_size,zorder=10,**kargs)
+            self.hough_ax.scatter((az + 180)%360, -dist, c=selected_line_color,s=selected_line_size,zorder=10,**kargs)
             
             angle_array = self.hough_transform.hough.angle_array
             selected_line_dist = self.hough_transform.hough.hough_lines_dist[index]
@@ -893,6 +894,7 @@ class HoughPlot:
         
     def plot_manual(self,az,dist):
         self.hough_ax.scatter(az,dist, zorder=10, c= "red")
+        self.hough_ax.scatter((az + 180)%360, -dist, zorder=10, c= "red")
         
         hough_point = self.hough_transform.hough_point(az=az,dist=dist)
         self.add_line_az(hough_point,az)
