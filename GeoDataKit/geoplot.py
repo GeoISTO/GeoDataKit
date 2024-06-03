@@ -31,6 +31,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
 def rose_diagram(data, **kargs):
     """
     Generates a RoseDiagram to show direction data.
@@ -482,6 +483,7 @@ class HoughTransform:
         az: Azimuth of the line, angle in degrees, 0 means North, i.e., Y direction, increasing clockwise
         return: np.array([nx,ny]), with n the normal vector to the line
         if multiple az values are given, the returned form is np.array([[nx0,nx1...,nxn],[ny0,ny1,...nyn])"""
+        
         az_rad = np.deg2rad(az)
         nx = -np.cos(az_rad)
         ny = np.sin(az_rad)
@@ -659,8 +661,8 @@ class HoughPlot:
         if data is not None: self.hough_transform.add_data(data)
         self.fig, self.cartesian_ax, self.hough_ax = 3*[None]
     
-    def plot(self,show_cartesian=True,show_hough=True,**kargs):
-        if self.fig is None:
+    def plot(self,show_cartesian=True,show_hough=True, force_init=False, **kargs):
+        if self.fig is None or force_init:
             self.init_figure(**kargs)
         if show_cartesian: self.plot_cartesian(**kargs)
         if show_hough: self.plot_hough(**kargs)
@@ -798,6 +800,7 @@ class HoughPlot:
         selected_point_color = get_key_argument("selected_point_color","red",**kargs)
         selected_line_size = get_key_argument("selected_line_size",16,**kargs)
         selected_line_color = get_key_argument("selected_line_color","#69B9FB",**kargs)
+        
         if self.cartesian_ax is not None:
             self.add_marked_point(selected_point,
                                   marked_size=selected_point_size, marked_color=selected_point_color,
@@ -825,8 +828,9 @@ class HoughPlot:
                                           arrowprops=dict(arrowstyle="->"))
                     self.cartesian_ax.annotate("", xytext=hough_point, xy=hough_point + normal_vector,
                                           arrowprops=dict(arrowstyle="->"))
-                    
+            
         if self.hough_ax is not None:
+            
             dist = self.hough_transform.compute_hough_distance(selected_point,az)
             self.hough_ax.scatter(az,dist,c=selected_line_color,s=selected_line_size,zorder=10,**kargs)
             self.hough_ax.scatter((az + 180)%360, -dist, c=selected_line_color,s=selected_line_size,zorder=10,**kargs)
@@ -892,12 +896,12 @@ class HoughPlot:
         self.hough_ax.set_aspect(2/3 / self.hough_ax.get_data_ratio())
         self.hough_ax.plot([self.hough_transform.hough.angle_min,self.hough_transform.hough.angle_max],[0,0],linewidth=1,linestyle='--',c="gray")
         
-    def plot_manual(self,az,dist):
-        self.hough_ax.scatter(az,dist, zorder=10, c= "red")
-        self.hough_ax.scatter((az + 180)%360, -dist, zorder=10, c= "red")
+    def plot_manual(self,az,dist, color="red"):
+        self.hough_ax.scatter(az,dist, zorder=10, c= color)
+        self.hough_ax.scatter((az + 180)%360, -dist, zorder=10, c= color)
         
         hough_point = self.hough_transform.hough_point(az=az,dist=dist)
-        self.add_line_az(hough_point,az)
+        self.add_line_az(hough_point,az, color=color)
 
 # ------------------------------
 
