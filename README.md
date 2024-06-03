@@ -1,3 +1,8 @@
+
+
+[![DOI](https://zenodo.org/badge/578120061.svg)](https://zenodo.org/doi/10.5281/zenodo.11450482)
+
+
 # GeoDataKit
 Python tools for geoscience data analysis and visualisation
 
