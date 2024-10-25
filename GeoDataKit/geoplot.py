@@ -375,13 +375,13 @@ class RoseDiagram:
             if self.verbose: print("Plotting the diagram")
             # using seaborn for drawing the polar histogram
             sns_ax = sns.histplot(self.data, x= self.direction_label_rad, hue= self.category_label,
-                 binwidth= self.bin_width_rad, binrange= [-self.bin_width_rad/2.0,2*np.pi],
+                 binwidth= self.bin_width_rad, binrange= [-self.bin_width_rad/2.0,2*np.pi-self.bin_width_rad/2.0],
                  stat= stat_type,
-                 hue_order= category_order,
+                 hue_order= category_order if self.category_label is not None else None,
                  multiple= category_interaction,
                  element= bin_shape,
                  edgecolor= edge_color, linewidth= edge_width, zorder= 10,
-                 palette= color_palette,
+                 palette= color_palette if self.category_label is not None else None,
                  alpha= alpha,
                  shrink= shrink,
                  ax= self.ax, legend= True )
