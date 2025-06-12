@@ -193,7 +193,7 @@ class RoseDiagram:
             if self.verbose and (self.data is not None): print("Resetting the dataset.")
             self.data = data
             return
-        assert( isinstance(data, pd.DataFrame)), "data must be a pd.DataFrame. Here data was: "+type(data)
+        assert( isinstance(data, pd.DataFrame)), "data must be a pd.DataFrame. Here data was: "+str(type(data))
         self.data = data
         
         # finding the direction label (either given or first value column)
@@ -343,7 +343,8 @@ class RoseDiagram:
         
         if self.verbose: print("Creating the diagram")
         self.fig = plt.figure()
-        self.fig.set_size_inches((14,8))
+        fig_size = get_kargs("fig_size", (14,8), **kargs)
+        self.fig.set_size_inches(fig_size)
         self.ax = plt.axes(projection= "polar")
         # setting the theta orientation properly
         self.ax.set_theta_zero_location('N') # set the North up
@@ -373,8 +374,14 @@ class RoseDiagram:
             if self.verbose: print("Undefined dataset, not drawing.")
         else:
             if self.verbose: print("Plotting the diagram")
+                        
+            self.binrange= [-self.bin_width_rad/2.0, 2*np.pi - self.bin_width_rad/2.0]
+
+            self.data["dip_rad_phase"] = self.binrange[0] + (self.data[self.direction_label_rad] - self.binrange[0]) %(2*np.pi)
+
             # using seaborn for drawing the polar histogram
-            sns_ax = sns.histplot(self.data, x= self.direction_label_rad, hue= self.category_label,
+            sns_ax = sns.histplot(self.data,
+                 x= "dip_rad_phase", hue= self.category_label,
                  binwidth= self.bin_width_rad, binrange= [-self.bin_width_rad/2.0,2*np.pi-self.bin_width_rad/2.0],
                  stat= stat_type,
                  hue_order= category_order if self.category_label is not None else None,
@@ -394,7 +401,8 @@ class RoseDiagram:
             self.ax.set_ylabel(y_axis_label)
         self.ax.set_ylabel(self.ax.get_ylabel(),labelpad= y_axis_label_padding)
         if y_axis_label_location == "north":
-            self.ax.yaxis.set_label_coords(0.5,0.95)    
+            y_label_coord = get_kargs("y_label_coord", (0.5, 0.95), **kargs)
+            self.ax.yaxis.set_label_coords(*y_label_coord)    
         self.ax.set_xlabel(x_axis_label)
 
 

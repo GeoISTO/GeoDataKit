@@ -18,7 +18,7 @@ Available notebooks:
 
 ## Installation
 ```
-pip install -i https://test.pypi.org/simple/ GeoDataKit
+pip install  GeoDataKit
 ```
 
 
@@ -30,6 +30,6 @@ python setup.py sdist bdist_wheel
 
 Pushing to PYPI:
 ```
-twine upload -r pypitest --verbose -p ######## dist/*
+twine upload --verbose dist/*
 ```
 
