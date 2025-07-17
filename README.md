@@ -5,7 +5,14 @@
 # GeoDataKit
 Python tools for geoscience data analysis and visualisation
 
-NB: this is really preliminary developments
+## Publications
+
+Please reference this code if used in any publication:
+
+Gautier Laurent. GeoDataKit. 2025, ⟨swh:1:snp:473d154fffc3460a153485d06c155d4c373fb97f;origin=https://github.com/GeoISTO/GeoDataKit⟩. ⟨hal-05168282⟩
+
+Papers refering to GeoDataKit:
+* Pereira et al. (2024) [⟨10.5194/ejm-36-491-2024⟩](https://dx.doi.org/10.5194/ejm-36-491-2024)
 
 ## Demo
 Demonstration Notebooks are available in the [./notebook](./notebook) directory.
@@ -13,6 +20,7 @@ Demonstration Notebooks are available in the [./notebook](./notebook) directory.
 Available notebooks:
 1. Rose Diagram demo
 2. Hough Transform demo
+3. Principal Component and Linear Discriminant Analysis PCA and LDA
 
 
 ## Installation
