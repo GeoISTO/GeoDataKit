@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
  
 setup(name='GeoDataKit',
-      version='0.0.2',
+      version='0.0.3',
       url='https://github.com/GeoISTO/GeoDataKit',
       license='MIT',
       author='Gautier Laurent',

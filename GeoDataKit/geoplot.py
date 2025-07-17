@@ -31,7 +31,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
+#------------------------------------------------------------------------------------------------
+# Rose diagrams to show directions
 def rose_diagram(data, **kargs):
     """
     Generates a RoseDiagram to show direction data.
@@ -910,6 +911,168 @@ class HoughPlot:
         
         hough_point = self.hough_transform.hough_point(az=az,dist=dist)
         self.add_line_az(hough_point,az, color=color)
+
+
+#------------------------------------------------------------------------------------------------
+# Principal Component Analysis
+import sklearn as skl
+
+def correlation_matrix(data, n_round= 2, cmap= "RdBu", ax= None, return_object= False):
+    """Show correlation matrix
+
+    :param data: the dataset
+    :type data: a pandas DataFrame or a numpy array
+    :param n_round: number of decimal digits, defaults to 2
+    :type n_round: int, optional
+    :param cmap: colormap to be used, defaults to "RdBu"
+    :type cmap: str, optional
+    :param ax: if this should be integrated into an existing plot you can pass it as ax,
+    defaults to None, if None, a new graphics is created
+    :type ax: a pyplot axis, optional
+    :param return_object: if true the graphics is retruned, defaults to False
+    :type return_object: bool, optional
+    :return: the graphical object if return_object else None
+    :rtype: a pyplot heatmap
+    """    
+    ax = ax if ax is not None else plt.gca()
+    corr = data.corr() if isinstance(data, pd.DataFrame) else np.corrcoef(data, rowvar=False)
+    matrix = corr.round(n_round)
+    heatmap= sns.heatmap(matrix, annot=True, vmin=-1, vmax=1, cmap=cmap, ax= ax)
+    ax.set_aspect("equal")
+    if return_object:
+        return heatmap
+		
+#Définition de fonctions pour l'ACP
+def pc_names(pca= None, n_components= None, comp_basename= None):
+    """Generates the names for Principal components
+
+    :param pca: a principal component analysis or linear discriminant analysis object, defaults to None
+    :param n_components: _description_, defaults to None
+    :type n_components: _type_, optional
+    :param comp_basename: _description_, defaults to None
+    :type comp_basename: the basename to be used, if not given it is PC for PCA LD for LDA, optional
+    :return: the names
+    :rtype: list of names
+    """    
+    assert(pca != None or n_components != None), "At least one of pca or n_components should be given"
+    
+    if isinstance(pca, skl.decomposition.PCA):
+        comp_basename= comp_basename if comp_basename is not None else "PC"
+        n_components = pca.n_components_
+    elif isinstance(pca, skl.discriminant_analysis.LinearDiscriminantAnalysis):
+        comp_basename= comp_basename if comp_basename is not None else "LD"
+        n_components = pca.scalings_.shape[1]
+    else:
+        raise("Unsupported type of space reduction", type(pca))
+        
+    return [comp_basename+str(i+1) for i in range(n_components)]
+
+def plot_explained_variance(pca, ax= None, comp_names = None, fig_size= None):
+    ax = ax if ax is not None else plt.gca()
+    ratios = pca.explained_variance_ratio_
+    comp_names = comp_names if comp_names is not None else pc_names(pca) 
+    sns.barplot(x=comp_names, y=ratios, color="lightblue", ax=ax)
+    ax = ax.twinx()
+    ax.set_ylim((0,1.05))
+    sns.lineplot(x=comp_names, y=ratios.cumsum(), color="red", ax=ax)
+    ax.set_title("Explained Variance")
+    if fig_size is not None:
+        plt.gcf().set_size_inches(fig_size)
+    
+def plot_correlation_circle(pca,
+                            var_names,
+                            ax= None, 
+                            comp_id_x= 0, comp_id_y= 1,
+                            label_shift = 0.08, arrow_width = 0.014, pc_arrow_width= 0.014,
+                            circle_args = dict(edgecolor="k", fill=False, linewidth = 2),
+                            font_args = dict(fontsize="large", fontfamily="cursive"),
+                            arrow_args  = dict(fill=True, edgecolor="k", linewidth=0, facecolor="k"),
+                            fig_size= None,
+                            return_graphics= False
+                           ):
+    ax = ax if ax is not None else plt.gca()
+    
+    if isinstance(pca, skl.decomposition.PCA):
+        kind = "pca"
+    elif isinstance(pca, skl.discriminant_analysis.LinearDiscriminantAnalysis):
+        kind = "lda"
+    else:
+        raise("Unsupported type of space reduction", type(pca))
+    
+    if kind == "pca":
+        delta = 0.2
+        ax.set_xlim((-1-delta,1+delta))
+        ax.set_ylim((-1-delta,1+delta))
+        ax.xaxis.set_major_formatter(lambda x, pos:'{:.1f}'.format(x))
+        ax.yaxis.set_major_formatter(lambda y, pos:'{:.1f}'.format(y))
+        corr_circle = plt.Circle((0,0), radius = 1, **circle_args)
+        ax.add_patch(corr_circle)
+        ax.set_title("Correlation Circle")
+    ax.set_aspect("equal")
+    
+    if fig_size is not None:
+        plt.gcf().set_size_inches(fig_size)
+
+    for i, el in enumerate(var_names):
+        
+        if kind == "pca":
+            components = pca.components_
+        elif kind == "lda":
+            components = pca.scalings_.T
+        
+        dx, dy = components[[comp_id_x,comp_id_y],i]
+        ax.arrow(0,0,dx,dy, length_includes_head=True, width = arrow_width, **arrow_args )
+
+        xy = np.array([dx,dy])
+        label_position = xy + label_shift * xy/np.linalg.norm(xy)
+        ax.text(*label_position,el,horizontalalignment="center", verticalalignment="center", **font_args )
+        
+    comp_names = pc_names(pca)
+    ax.arrow(0,0,1,0, length_includes_head=True, width = pc_arrow_width*1.25, **arrow_args )
+    ax.arrow(0,0,0,1, length_includes_head=True, width = pc_arrow_width*1.25, **arrow_args )
+    ax.text(1.1, 0, comp_names[comp_id_x], horizontalalignment="center", verticalalignment="center", **font_args )
+    ax.text(0, 1.06, comp_names[comp_id_y], horizontalalignment="center", verticalalignment="center", **font_args )
+
+    if return_graphics: return ax
+    
+def plot_principal_components(pca, data,
+                              x = None, y= None,
+                              kind= "scatter", sampling= None, nbins= 40,
+                              s=5, marker="*",
+                              ax= None,
+                              fig_size= None,
+                              return_graphics= False, **kargs):
+    ax = ax if ax is not None else plt.gca()
+    ax.set_title("Individual Space")
+    
+    if x is None or y is None:
+        if isinstance(pca, skl.decomposition.PCA):
+            comp_names = ["PC"+str(i+1) for i in range(pca.n_components_)]
+        elif isinstance(pca, skl.discriminant_analysis.LinearDiscriminantAnalysis):
+            comp_names = ["LD"+str(i+1) for i in range(pca.scalings_.shape[1])]
+        x = x if x is not None else comp_names[0]
+        y = y if y is not None else comp_names[1]
+    
+    if sampling is not None:
+        data = data.sample(n=sampling)
+    if kind == "scatter":
+        sns.scatterplot(data=data, x= x, y=y, ax=ax, **kargs)
+    elif kind == "kde":
+        sns.kdeplot(data=data, x= x, y=y, ax=ax, **kargs )
+    elif kind == "hist":
+        if not( ("bins" in kargs.keys()) or ("binwidth" in kargs.keys()) ):
+            xmin, xmax = data[x].min(), data[x].max()
+            xrange = xmax - xmin
+            ymin, ymax = data[y].min(), data[y].max()
+            yrange = ymax - ymin
+            binwidth = max( xrange/nbins, yrange/nbins)
+            sns.histplot(data=data, x= x, y=y, ax=ax, binwidth=binwidth, **kargs )
+        sns.histplot(data=data, x= x, y=y, ax=ax, **kargs )
+    ax.set_aspect("equal")
+    if fig_size is not None:
+        plt.gcf().set_size_inches(fig_size)
+        
+    if return_graphics: return ax
 
 # ------------------------------
 

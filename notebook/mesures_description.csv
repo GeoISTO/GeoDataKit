@@ -1,0 +1,9 @@
+name,decription,unit
+eau,teneur en eau,%
+psp,poids spécifique,g.cm-3
+esat,module d’élasticité à l’état saturé d’eau,MPa
+esec,module d’élasticité à l’état sec,MPa
+rsat,résistance à la compression à l’état saturé d’eau,MPa
+rsec,résistance à la compression à l’état sec,MPa
+vsat,vitesse du son à l’état saturé d’eau,m.s-1
+vsec,vitesse du son à l’état sec,m.s-1
